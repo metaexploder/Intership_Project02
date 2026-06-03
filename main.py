@@ -111,7 +111,10 @@ def main(input_file: str) -> None:
     # ------------------------------------------------------------------
     # 5. Generate report
     # ------------------------------------------------------------------
-    generate_report(results, OUTPUT_REPORT)
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    report_filename = f"PACE_PayPeriod_Validation_Report_{timestamp}.xlsx"
+    output_report_path = OUTPUT_REPORT.parent / report_filename
+    generate_report(results, output_report_path)
 
     # ------------------------------------------------------------------
     # 6. Summary
@@ -124,7 +127,7 @@ def main(input_file: str) -> None:
     logger.info("=" * 70)
     logger.info("DONE - Total: %d | FULL: %d | PARTIAL: %d | NO: %d",
                 len(results), full, partial, no_cov)
-    logger.info("Report: %s", OUTPUT_REPORT)
+    logger.info("Report: %s", output_report_path)
     logger.info("Elapsed: %.1f seconds", elapsed)
     logger.info("=" * 70)
 
