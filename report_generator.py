@@ -146,6 +146,3 @@ def _build_summary_sheet(wb: Workbook, results: List[Dict]) -> None:
         files_cell.alignment = _CENTER
         files_cell.border = _THIN_BORDER
 
-    # Auto-filter
-    last_row = header_row + len(results)
-    ws.auto_filter.ref = f"A{header_row}:D{last_row}"
