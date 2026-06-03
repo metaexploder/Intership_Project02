@@ -196,13 +196,11 @@ def _process_woid(conn, woid: str) -> Dict:
 
 
 # ---------------------------------------------------------------------------
-# CLI entry point
+# Configuration — Set your input file path here
 # ---------------------------------------------------------------------------
+INPUT_FILE = r"woids.txt"  # Change this to your WOID file path (.txt or .xlsx)
+
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Usage:  python main.py <input_file>")
-        print("  <input_file>  .txt or .xlsx file containing WOIDs")
-        sys.exit(1)
+    main(INPUT_FILE)
 
-    main(sys.argv[1])
