@@ -3,18 +3,19 @@ PACE Payroll Period Coverage Validator
 =======================================
 Entry point — orchestrates the full validation pipeline.
 
-Usage:
-    python main.py <input_file>
-
-    <input_file>  Path to a .txt or .xlsx file containing WOIDs.
+Optimized with:
+    - Batch SQL queries (2 round-trips instead of 2*N)
+    - Parallel file retrieval & Excel processing via ThreadPoolExecutor
 """
 
 import sys
 import time
-from typing import Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Dict, List, Optional, Tuple
+from datetime import date
 
 from config import DATASET_DIR, OUTPUT_REPORT
-from db_client import fetch_file_info, fetch_policy_period, get_connection
+from db_client import fetch_all_file_info, fetch_all_policy_periods, get_connection
 from file_retriever import retrieve_files
 from input_reader import read_woids
 from logger_setup import setup_logger
@@ -24,19 +25,17 @@ from validator import validate_coverage
 
 logger = setup_logger()
 
+# Max parallel workers for file I/O + Excel parsing
+MAX_WORKERS = 8
+
 
 def main(input_file: str) -> None:
     """
     Run the full PACE payroll validation pipeline.
-
-    Parameters
-    ----------
-    input_file : str
-        Path to a .txt or .xlsx file containing WOIDs.
     """
     start_time = time.time()
     logger.info("=" * 70)
-    logger.info("PACE Payroll Period Coverage Validator — Starting")
+    logger.info("PACE Payroll Period Coverage Validator - Starting")
     logger.info("=" * 70)
 
     # ------------------------------------------------------------------
@@ -47,7 +46,7 @@ def main(input_file: str) -> None:
         logger.error("No WOIDs found in input file. Exiting.")
         sys.exit(1)
 
-    logger.info("Processing %d WOID(s) …", len(woids))
+    logger.info("Processing %d WOID(s) ...", len(woids))
 
     # ------------------------------------------------------------------
     # 2. Connect to SQL Server
@@ -59,39 +58,60 @@ def main(input_file: str) -> None:
         sys.exit(1)
 
     # ------------------------------------------------------------------
-    # 3. Process each WOID
+    # 3. Batch-fetch ALL policy periods & file info (2 SQL calls total)
     # ------------------------------------------------------------------
-    results: List[Dict] = []
+    logger.info("Fetching all policy periods (batch) ...")
+    all_policies = fetch_all_policy_periods(conn, woids)
 
-    for idx, woid in enumerate(woids, start=1):
-        logger.info("-" * 50)
-        logger.info("WOID %s  [%d / %d]", woid, idx, len(woids))
-        logger.info("-" * 50)
+    logger.info("Fetching all file info (batch) ...")
+    all_file_info = fetch_all_file_info(conn, woids)
 
-        try:
-            result = _process_woid(conn, woid)
-            results.append(result)
-        except Exception as exc:
-            logger.error(
-                "WOID %s — Unexpected error, skipping: %s", woid, exc,
-                exc_info=True,
-            )
-            results.append({
-                "woid": woid,
-                "status": "NO",
-                "missing_gaps": [],
-                "sheets_processed": 0,
-                "files_count": 0,
-            })
-
-    # ------------------------------------------------------------------
-    # 4. Close connection
-    # ------------------------------------------------------------------
+    # Close DB connection early — no longer needed
     try:
         conn.close()
         logger.info("Database connection closed.")
     except Exception:
         pass
+
+    # ------------------------------------------------------------------
+    # 4. Process WOIDs in parallel (file retrieval + extraction + validation)
+    # ------------------------------------------------------------------
+    results: List[Dict] = []
+    workers = min(MAX_WORKERS, len(woids))
+
+    logger.info("Processing WOIDs with %d parallel worker(s) ...", workers)
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        future_to_woid = {}
+        for woid in woids:
+            policy = all_policies.get(woid)
+            file_info = all_file_info.get(woid, [])
+            future = executor.submit(
+                _process_woid, woid, policy, file_info
+            )
+            future_to_woid[future] = woid
+
+        for future in as_completed(future_to_woid):
+            woid = future_to_woid[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as exc:
+                logger.error(
+                    "WOID %s - Unexpected error, skipping: %s", woid, exc,
+                    exc_info=True,
+                )
+                results.append({
+                    "woid": woid,
+                    "status": "NO",
+                    "missing_gaps": [],
+                    "sheets_processed": 0,
+                    "files_count": 0,
+                })
+
+    # Preserve original WOID order for the report
+    woid_order = {w: i for i, w in enumerate(woids)}
+    results.sort(key=lambda r: woid_order.get(r["woid"], 0))
 
     # ------------------------------------------------------------------
     # 5. Generate report
@@ -107,7 +127,7 @@ def main(input_file: str) -> None:
     elapsed = time.time() - start_time
 
     logger.info("=" * 70)
-    logger.info("DONE  —  Total: %d | FULL: %d | PARTIAL: %d | NO: %d",
+    logger.info("DONE  -  Total: %d | FULL: %d | PARTIAL: %d | NO: %d",
                 len(results), full, partial, no_cov)
     logger.info("Report: %s", OUTPUT_REPORT)
     logger.info("Elapsed: %.1f seconds", elapsed)
@@ -115,17 +135,23 @@ def main(input_file: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Per-WOID processing
+# Per-WOID processing (runs in thread pool)
 # ---------------------------------------------------------------------------
 
-def _process_woid(conn, woid: str) -> Dict:
+def _process_woid(
+    woid: str,
+    policy: Optional[Tuple[date, date]],
+    file_info: List[Dict[str, str]],
+) -> Dict:
     """
-    Run the full pipeline for a single WOID and return a result dict.
+    Run file retrieval, extraction, and validation for a single WOID.
+    Policy and file_info are pre-fetched from batch queries.
     """
+    logger.info("WOID %s - Processing ...", woid)
+
     # --- Policy period ---
-    policy = fetch_policy_period(conn, woid)
     if policy is None:
-        logger.warning("WOID %s — No policy period; marking as NO.", woid)
+        logger.warning("WOID %s - No policy period; marking as NO.", woid)
         return {
             "woid": woid,
             "status": "NO",
@@ -136,9 +162,8 @@ def _process_woid(conn, woid: str) -> Dict:
     policy_start, policy_end = policy
 
     # --- File info ---
-    file_info = fetch_file_info(conn, woid)
     if not file_info:
-        logger.warning("WOID %s — No file info; marking as NO.", woid)
+        logger.warning("WOID %s - No file info; marking as NO.", woid)
         return {
             "woid": woid,
             "status": "NO",
@@ -150,7 +175,7 @@ def _process_woid(conn, woid: str) -> Dict:
     # --- Retrieve files ---
     copied_files = retrieve_files(woid, file_info, DATASET_DIR)
     if not copied_files:
-        logger.warning("WOID %s — No files copied; marking as NO.", woid)
+        logger.warning("WOID %s - No files copied; marking as NO.", woid)
         return {
             "woid": woid,
             "status": "NO",
@@ -165,7 +190,7 @@ def _process_woid(conn, woid: str) -> Dict:
 
     if not payroll_periods:
         logger.warning(
-            "WOID %s — No payroll periods extracted; marking as NO.", woid
+            "WOID %s - No payroll periods extracted; marking as NO.", woid
         )
         return {
             "woid": woid,
@@ -180,11 +205,9 @@ def _process_woid(conn, woid: str) -> Dict:
 
     if gaps:
         for g_start, g_end in gaps:
-            logger.info(
-                "WOID %s - Missing gap: %s -> %s", woid, g_start, g_end
-            )
+            logger.info("WOID %s - Missing gap: %s -> %s", woid, g_start, g_end)
 
-    logger.info("WOID %s — Validation result: %s", woid, status)
+    logger.info("WOID %s - Validation result: %s", woid, status)
 
     return {
         "woid": woid,
@@ -203,4 +226,3 @@ INPUT_FILE = r"woids.txt"  # Change this to your WOID file path (.txt or .xlsx)
 
 if __name__ == "__main__":
     main(INPUT_FILE)
-
