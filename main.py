@@ -1,17 +1,18 @@
 """
-PACE Payroll Period Coverage Validator
-=======================================
+PACE Payroll Period Coverage Validator (Optimized)
+====================================================
 Entry point — orchestrates the full validation pipeline.
 
-Optimized with:
-    - Batch SQL queries (2 round-trips instead of 2*N)
-    - Parallel file retrieval & Excel processing via ThreadPoolExecutor
+Performance optimizations:
+    - Batch SQL queries (2 total instead of 2 x N)
+    - ThreadPoolExecutor for parallel file retrieval + Excel parsing
+    - openpyxl read_only mode for fast Excel reads
 """
 
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from datetime import date
 
 from config import DATASET_DIR, OUTPUT_REPORT
@@ -31,7 +32,7 @@ MAX_WORKERS = 8
 
 def main(input_file: str) -> None:
     """
-    Run the full PACE payroll validation pipeline.
+    Run the full PACE payroll validation pipeline (optimized).
     """
     start_time = time.time()
     logger.info("=" * 70)
@@ -58,15 +59,14 @@ def main(input_file: str) -> None:
         sys.exit(1)
 
     # ------------------------------------------------------------------
-    # 3. Batch-fetch ALL policy periods & file info (2 SQL calls total)
+    # 3. BATCH fetch all data in 2 SQL round-trips
     # ------------------------------------------------------------------
-    logger.info("Fetching all policy periods (batch) ...")
+    t1 = time.time()
     all_policies = fetch_all_policy_periods(conn, woids)
-
-    logger.info("Fetching all file info (batch) ...")
     all_file_info = fetch_all_file_info(conn, woids)
+    logger.info("SQL queries completed in %.1f seconds.", time.time() - t1)
 
-    # Close DB connection early — no longer needed
+    # Close connection early — no longer needed
     try:
         conn.close()
         logger.info("Database connection closed.")
@@ -74,21 +74,17 @@ def main(input_file: str) -> None:
         pass
 
     # ------------------------------------------------------------------
-    # 4. Process WOIDs in parallel (file retrieval + extraction + validation)
+    # 4. Process WOIDs in parallel (file I/O + Excel parsing)
     # ------------------------------------------------------------------
+    t2 = time.time()
     results: List[Dict] = []
-    workers = min(MAX_WORKERS, len(woids))
 
-    logger.info("Processing WOIDs with %d parallel worker(s) ...", workers)
-
-    with ThreadPoolExecutor(max_workers=workers) as executor:
+    with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(woids))) as executor:
         future_to_woid = {}
         for woid in woids:
             policy = all_policies.get(woid)
             file_info = all_file_info.get(woid, [])
-            future = executor.submit(
-                _process_woid, woid, policy, file_info
-            )
+            future = executor.submit(_process_woid, woid, policy, file_info)
             future_to_woid[future] = woid
 
         for future in as_completed(future_to_woid):
@@ -97,10 +93,7 @@ def main(input_file: str) -> None:
                 result = future.result()
                 results.append(result)
             except Exception as exc:
-                logger.error(
-                    "WOID %s - Unexpected error, skipping: %s", woid, exc,
-                    exc_info=True,
-                )
+                logger.error("WOID %s - Unexpected error: %s", woid, exc)
                 results.append({
                     "woid": woid,
                     "status": "NO",
@@ -109,9 +102,11 @@ def main(input_file: str) -> None:
                     "files_count": 0,
                 })
 
-    # Preserve original WOID order for the report
+    # Sort results back to input order
     woid_order = {w: i for i, w in enumerate(woids)}
-    results.sort(key=lambda r: woid_order.get(r["woid"], 0))
+    results.sort(key=lambda r: woid_order.get(r["woid"], 999999))
+
+    logger.info("File processing completed in %.1f seconds.", time.time() - t2)
 
     # ------------------------------------------------------------------
     # 5. Generate report
@@ -127,7 +122,7 @@ def main(input_file: str) -> None:
     elapsed = time.time() - start_time
 
     logger.info("=" * 70)
-    logger.info("DONE  -  Total: %d | FULL: %d | PARTIAL: %d | NO: %d",
+    logger.info("DONE - Total: %d | FULL: %d | PARTIAL: %d | NO: %d",
                 len(results), full, partial, no_cov)
     logger.info("Report: %s", OUTPUT_REPORT)
     logger.info("Elapsed: %.1f seconds", elapsed)
@@ -140,12 +135,12 @@ def main(input_file: str) -> None:
 
 def _process_woid(
     woid: str,
-    policy: Optional[Tuple[date, date]],
+    policy,
     file_info: List[Dict[str, str]],
 ) -> Dict:
     """
-    Run file retrieval, extraction, and validation for a single WOID.
-    Policy and file_info are pre-fetched from batch queries.
+    Process a single WOID: retrieve files, extract periods, validate.
+    This function is thread-safe (no shared mutable state).
     """
     logger.info("WOID %s - Processing ...", woid)
 
@@ -189,9 +184,7 @@ def _process_woid(
     payroll_periods = extraction["periods"]
 
     if not payroll_periods:
-        logger.warning(
-            "WOID %s - No payroll periods extracted; marking as NO.", woid
-        )
+        logger.warning("WOID %s - No payroll periods extracted; marking as NO.", woid)
         return {
             "woid": woid,
             "status": "NO",

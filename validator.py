@@ -39,12 +39,30 @@ def validate_coverage(
         - status: "FULL", "PARTIAL", or "NO"
         - missing_gaps: list of (gap_start, gap_end) tuples
     """
-    if not payroll_periods:
+    if policy_start > policy_end:
+        logger.error(
+            "Invalid policy period: policy_start (%s) is after policy_end (%s)",
+            policy_start, policy_end
+        )
+        return ("NO", [(policy_start, policy_end)])
+
+    # Filter out malformed payroll periods (start > end)
+    cleaned_periods = []
+    for start, end in payroll_periods:
+        if start <= end:
+            cleaned_periods.append((start, end))
+        else:
+            logger.warning(
+                "Ignored invalid payroll period: %s -> %s (start date is after end date)",
+                start, end
+            )
+
+    if not cleaned_periods:
         gap = (policy_start, policy_end)
         return ("NO", [gap])
 
     # 1. Merge overlapping / adjacent payroll periods
-    merged = _merge_periods(payroll_periods)
+    merged = _merge_periods(cleaned_periods)
 
     # 2. Clip merged periods to the policy window
     clipped = _clip_to_policy(merged, policy_start, policy_end)

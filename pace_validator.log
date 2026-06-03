@@ -5,3 +5,5 @@
 2026-06-03 11:11:23 | INFO     | PACE Payroll Period Coverage Validator — Starting
 2026-06-03 11:11:23 | INFO     | ======================================================================
 2026-06-03 12:40:21 | INFO     | Report saved -> test_report.xlsx
+2026-06-03 13:37:00 | INFO     | Report saved -> test_report.xlsx
+2026-06-03 13:50:51 | WARNING  | Ignored invalid payroll period: 2026-05-10 -> 2026-05-01 (start date is after end date)

@@ -52,6 +52,15 @@ def retrieve_files(
 
         dest_path = woid_dir / doc_name
         try:
+            # Check if file already exists and matches the source size
+            if dest_path.is_file() and source_file.is_file() and dest_path.stat().st_size == source_file.stat().st_size:
+                logger.info(
+                    "WOID %s - File %s already exists and matches source size (skipping copy)",
+                    woid, doc_name
+                )
+                copied_files.append(dest_path)
+                continue
+
             shutil.copy2(str(source_file), str(dest_path))
             logger.info(
                 "WOID %s - Copied %s -> %s", woid, source_file.name, dest_path.name
