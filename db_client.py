@@ -195,22 +195,25 @@ def fetch_file_info(
 # ---------------------------------------------------------------------------
 
 def _build_batch_policy_query(placeholders: str) -> str:
-    """Build a batch policy query selecting woid + dates."""
-    return f"""
-        SELECT woid, InceptionDate, ExpirationDate
-        FROM osi..WOPolicy (nolock)
-        WHERE woid IN ({placeholders})
-    """
+    """Build a batch policy query selecting woid + dates dynamically from config."""
+    import re
+    q = QUERY_POLICY_PERIOD.strip()
+    # Ensure woid is selected
+    q_sub = re.sub(r'(?i)^\s*select\s+', 'SELECT woid, ', q)
+    # Replace woid = ? with woid IN (...)
+    q_final = re.sub(r'(?i)\bwoid\s*=\s*\?', f'woid IN ({placeholders})', q_sub)
+    return q_final
 
 
 def _build_batch_file_query(placeholders: str) -> str:
-    """Build a batch file-info query selecting PrimaryIndex + columns."""
-    return f"""
-        SELECT PrimaryIndex, DocName, ReposSpec
-        FROM Docrepository..Documents (nolock)
-        WHERE PrimaryIndex IN ({placeholders})
-          AND DocDesc LIKE '%Payroll%'
-    """
+    """Build a batch file-info query selecting PrimaryIndex + columns dynamically from config."""
+    import re
+    q = QUERY_FILE_INFO.strip()
+    # Ensure PrimaryIndex is selected
+    q_sub = re.sub(r'(?i)^\s*select\s+', 'SELECT PrimaryIndex, ', q)
+    # Replace PrimaryIndex = ? with PrimaryIndex IN (...)
+    q_final = re.sub(r'(?i)\bPrimaryIndex\s*=\s*\?', f'PrimaryIndex IN ({placeholders})', q_sub)
+    return q_final
 
 
 def _chunked(lst: List, size: int):
