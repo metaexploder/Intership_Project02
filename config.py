@@ -25,7 +25,7 @@ def get_connection_string() -> str:
     """Build a pyodbc connection string from DB_CONFIG."""
     return (
         'DRIVER=ODBC DRIVER 17 FOR SQL Server;'
-        'SERVER=OSIRPTS01;'
+        'SERVER=VISHAL;'
         'Trusted_Connection=yes;'
         'ApplicationIntent=Readonly;'
     )
@@ -37,15 +37,14 @@ def get_connection_string() -> str:
 # Query 1 — Policy Period
 QUERY_POLICY_PERIOD = """
     SELECT InceptionDate, ExpirationDate
-    FROM osi..WOPolicy (nolock)
+    FROM DB..Policy (nolock)
     WHERE woid = ?
 """
 
 # Query 2 — Payroll File Information
 QUERY_FILE_INFO = """
     SELECT DocName, ReposSpec
-    FROM Docrepository..Documents (nolock)
-    WHERE PrimaryIndex = ?
-      AND DocDesc = 'PACE Extracted'
+    FROM DB..Doc (nolock)
+    WHERE woid = ?
 """
 
