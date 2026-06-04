@@ -49,7 +49,7 @@ _LEFT = Alignment(horizontal="left", vertical="center")
 
 def generate_report(results: List[Dict], output_path: Path) -> None:
     """
-    Generate ``PACE_Payroll_Validation_Report.xlsx``.
+    Generate ``PACE_PayPeriod_Validation_Report.xlsx``.
 
     Parameters
     ----------
@@ -113,7 +113,7 @@ def _build_summary_sheet(wb: Workbook, results: List[Dict]) -> None:
 
     # --- Data Table ---
     header_row = 8
-    headers = ["WOID", "Status", "Sheets", "Files"]
+    headers = ["WOID", "Coverage", "Sheets", "Files"]
     for col_idx, header in enumerate(headers, start=1):
         cell = ws.cell(row=header_row, column=col_idx, value=header)
         cell.font = _HEADER_FONT

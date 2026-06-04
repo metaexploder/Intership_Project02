@@ -15,7 +15,7 @@ from pathlib import Path
 # ---------------------------------------------------------------------------
 BASE_DIR = Path(__file__).resolve().parent
 DATASET_DIR = BASE_DIR / "dataset"
-OUTPUT_REPORT = BASE_DIR / "PACE_Payroll_Validation_Report.xlsx"
+OUTPUT_REPORT = BASE_DIR / "PACE_PayPeriod_Validation_Report.xlsx"
 LOG_FILE = BASE_DIR / "pace_validator.log"
 
 # ---------------------------------------------------------------------------
