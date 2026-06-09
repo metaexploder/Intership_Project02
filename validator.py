@@ -4,16 +4,24 @@ PACE Payroll Validator — Coverage Validator
 Determines whether payroll periods fully cover a policy period.
 
 Statuses:
-    FULL    — Policy period is covered, with edge gaps ≤ BUFFER_DAYS tolerated.
-    PARTIAL — Gaps exist beyond buffer tolerance (internal OR edge gaps too large).
+    FULL    — All three conditions met:
+                1. abs(InceptionDate - PeriodStart) <= BUFFER_DAYS
+                2. abs(PeriodEnd - ExpirationDate)  <= BUFFER_DAYS
+                3. No internal gaps within [InceptionDate, ExpirationDate]
+    PARTIAL — At least one condition above is violated.
     NO      — Zero overlap between payroll and policy periods.
 
-Buffer Logic:
-    After finding all gaps within [policy_start, policy_end]:
-      - A gap at the VERY START (gap_start == policy_start) that is ≤ BUFFER_DAYS wide → forgiven.
-      - A gap at the VERY END   (gap_end   == policy_end)   that is ≤ BUFFER_DAYS wide → forgiven.
-      - Internal gaps between payroll segments are NEVER forgiven regardless of size.
-    If no unforgiven gaps remain → FULL. Otherwise → PARTIAL.
+Buffer Definitions:
+    StartBuffer = InceptionDate - PeriodStart
+        Positive → payroll starts BEFORE inception (early coverage, surplus)
+        Negative → payroll starts AFTER  inception (late start, deficit)
+
+    EndBuffer = PeriodEnd - ExpirationDate
+        Positive → payroll ends AFTER  expiration (extra coverage, surplus)
+        Negative → payroll ends BEFORE expiration (ends early, deficit)
+
+    FULL requires: abs(StartBuffer) <= BUFFER_DAYS AND abs(EndBuffer) <= BUFFER_DAYS
+                   AND no internal gaps.
 """
 
 from datetime import date, timedelta
@@ -31,22 +39,23 @@ def validate_coverage(
     payroll_periods: List[Tuple[date, date]],
 ) -> Tuple[str, List[Tuple[date, date]]]:
     """
-    Validate payroll coverage against the policy period.
+    Validate payroll coverage against the policy period with ± BUFFER_DAYS tolerance.
 
     Parameters
     ----------
-    policy_start : date
-    policy_end : date
+    policy_start : date   — InceptionDate from DB
+    policy_end   : date   — ExpirationDate from DB
     payroll_periods : List[Tuple[date, date]]
-        Each tuple is (period_start, period_end).
+        Each tuple is (period_start, period_end) from the payroll Excel files.
 
     Returns
     -------
     Tuple[str, List[Tuple[date, date]]]
-        (status, remaining_gaps)
-        - status         : "FULL", "PARTIAL", or "NO"
-        - remaining_gaps : gaps that were NOT forgiven by the buffer
+        (status, unforgiven_gaps)
+        status          : "FULL", "PARTIAL", or "NO"
+        unforgiven_gaps : gaps that are NOT excused by the buffer
     """
+    # --- Guard: invalid policy window ---
     if policy_start > policy_end:
         logger.error(
             "Invalid policy period: policy_start (%s) is after policy_end (%s)",
@@ -54,7 +63,7 @@ def validate_coverage(
         )
         return ("NO", [(policy_start, policy_end)])
 
-    # Filter out malformed payroll periods (start > end)
+    # --- Filter out malformed payroll periods (start > end) ---
     cleaned_periods = []
     for start, end in payroll_periods:
         if start <= end:
@@ -68,42 +77,89 @@ def validate_coverage(
     if not cleaned_periods:
         return ("NO", [(policy_start, policy_end)])
 
-    # 1. Merge overlapping / adjacent payroll periods
-    merged = _merge_periods(cleaned_periods)
+    # -----------------------------------------------------------------------
+    # Step 1 — Compute overall payroll bounds (PeriodStart / PeriodEnd)
+    # -----------------------------------------------------------------------
+    period_start: date = min(s for s, _ in cleaned_periods)
+    period_end:   date = max(e for _, e in cleaned_periods)
 
-    # 2. Clip merged periods to the policy window [policy_start, policy_end]
+    # -----------------------------------------------------------------------
+    # Step 2 — Compute buffers
+    # -----------------------------------------------------------------------
+    start_buffer: int = (policy_start - period_start).days  # +ve = payroll starts before inception
+    end_buffer:   int = (period_end   - policy_end).days    # +ve = payroll ends after expiration
+
+    start_ok: bool = abs(start_buffer) <= BUFFER_DAYS
+    end_ok:   bool = abs(end_buffer)   <= BUFFER_DAYS
+
+    logger.debug(
+        "WOID buffers: PeriodStart=%s PeriodEnd=%s | StartBuffer=%+dd EndBuffer=%+dd | "
+        "StartOK=%s EndOK=%s",
+        period_start, period_end, start_buffer, end_buffer, start_ok, end_ok,
+    )
+
+    if not start_ok:
+        logger.info(
+            "StartBuffer %+d days exceeds ±%d day tolerance "
+            "(InceptionDate=%s, PeriodStart=%s)",
+            start_buffer, BUFFER_DAYS, policy_start, period_start,
+        )
+    if not end_ok:
+        logger.info(
+            "EndBuffer %+d days exceeds ±%d day tolerance "
+            "(ExpirationDate=%s, PeriodEnd=%s)",
+            end_buffer, BUFFER_DAYS, policy_end, period_end,
+        )
+
+    # -----------------------------------------------------------------------
+    # Step 3 — Merge payroll periods & clip to policy window
+    # -----------------------------------------------------------------------
+    merged  = _merge_periods(cleaned_periods)
     clipped = _clip_to_policy(merged, policy_start, policy_end)
 
     if not clipped:
-        # No overlap at all
+        # Zero overlap even after all processing → NO
         return ("NO", [(policy_start, policy_end)])
 
-    # 3. Find raw gaps within the policy window
-    raw_gaps = _find_gaps(clipped, policy_start, policy_end)
+    # -----------------------------------------------------------------------
+    # Step 4 — Find all gaps within [policy_start, policy_end]
+    # -----------------------------------------------------------------------
+    all_gaps = _find_gaps(clipped, policy_start, policy_end)
 
-    if not raw_gaps:
+    # Separate into internal gaps and edge gaps
+    # Internal gaps: start AFTER policy_start AND end BEFORE policy_end
+    internal_gaps = [
+        (gs, ge) for gs, ge in all_gaps
+        if gs > policy_start and ge < policy_end
+    ]
+
+    if internal_gaps:
+        for gs, ge in internal_gaps:
+            logger.info("Internal gap found: %s -> %s", gs, ge)
+
+    # -----------------------------------------------------------------------
+    # Step 5 — Determine status
+    # -----------------------------------------------------------------------
+    if start_ok and end_ok and not internal_gaps:
         return ("FULL", [])
 
-    # 4. Apply buffer: forgive start/end edge gaps that are within BUFFER_DAYS
-    remaining_gaps = []
-    for g_start, g_end in raw_gaps:
-        gap_days = (g_end - g_start).days + 1  # inclusive day count
-        is_start_edge = (g_start == policy_start)
-        is_end_edge   = (g_end   == policy_end)
+    # Build the list of unforgiven gaps for reporting
+    unforgiven: List[Tuple[date, date]] = []
+    for gs, ge in all_gaps:
+        is_start_edge = (gs == policy_start)
+        is_end_edge   = (ge == policy_end)
 
-        if (is_start_edge or is_end_edge) and gap_days <= BUFFER_DAYS:
-            logger.info(
-                "Buffer absorbed %s edge gap: %s -> %s (%d day(s), tolerance=%d)",
-                "start" if is_start_edge else "end",
-                g_start, g_end, gap_days, BUFFER_DAYS,
-            )
-        else:
-            remaining_gaps.append((g_start, g_end))
+        if is_start_edge and start_ok:
+            # Edge gap at start is within buffer tolerance — forgiven
+            logger.debug("Start edge gap %s->%s forgiven by buffer.", gs, ge)
+            continue
+        if is_end_edge and end_ok:
+            # Edge gap at end is within buffer tolerance — forgiven
+            logger.debug("End edge gap %s->%s forgiven by buffer.", gs, ge)
+            continue
+        unforgiven.append((gs, ge))
 
-    if not remaining_gaps:
-        return ("FULL", [])
-    else:
-        return ("PARTIAL", remaining_gaps)
+    return ("PARTIAL", unforgiven)
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +191,7 @@ def _clip_to_policy(
     policy_start: date,
     policy_end: date,
 ) -> List[Tuple[date, date]]:
-    """Clip merged periods to the policy window, dropping non-overlapping ranges."""
+    """Clip merged periods to [policy_start, policy_end], dropping non-overlapping ranges."""
     clipped: List[Tuple[date, date]] = []
     for start, end in merged:
         if end < policy_start or start > policy_end:
@@ -149,7 +205,7 @@ def _find_gaps(
     policy_start: date,
     policy_end: date,
 ) -> List[Tuple[date, date]]:
-    """Identify all date gaps within [policy_start, policy_end]."""
+    """Find all date gaps within [policy_start, policy_end]."""
     gaps: List[Tuple[date, date]] = []
 
     # Gap before the first clipped period

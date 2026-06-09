@@ -11,3 +11,25 @@
 2026-06-09 18:32:56 | INFO     | Buffer absorbed start edge gap: 2026-01-01 -> 2026-01-20 (20 day(s), tolerance=25)
 2026-06-09 18:32:56 | INFO     | Buffer absorbed end edge gap: 2026-12-12 -> 2026-12-31 (20 day(s), tolerance=25)
 2026-06-09 18:32:56 | INFO     | Buffer absorbed start edge gap: 2026-01-01 -> 2026-01-25 (25 day(s), tolerance=25)
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-02-04 PeriodEnd=2026-02-04 | StartBuffer=+0d EndBuffer=+0d | StartOK=True EndOK=True
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-02-01 PeriodEnd=2026-02-08 | StartBuffer=+3d EndBuffer=+4d | StartOK=True EndOK=True
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-02-24 PeriodEnd=2026-01-20 | StartBuffer=-20d EndBuffer=-15d | StartOK=True EndOK=True
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-01-01 PeriodEnd=2026-02-04 | StartBuffer=+34d EndBuffer=+0d | StartOK=False EndOK=True
+2026-06-09 21:28:55 | INFO     | StartBuffer +34 days exceeds ±25 day tolerance (InceptionDate=2025-02-04, PeriodStart=2025-01-01)
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-01-01 PeriodEnd=2026-12-31 | StartBuffer=+44d EndBuffer=+320d | StartOK=False EndOK=False
+2026-06-09 21:28:55 | INFO     | StartBuffer +44 days exceeds ±25 day tolerance (InceptionDate=2025-02-14, PeriodStart=2025-01-01)
+2026-06-09 21:28:55 | INFO     | EndBuffer +320 days exceeds ±25 day tolerance (ExpirationDate=2026-02-14, PeriodEnd=2026-12-31)
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-03-16 PeriodEnd=2026-04-15 | StartBuffer=+37d EndBuffer=-7d | StartOK=False EndOK=True
+2026-06-09 21:28:55 | INFO     | StartBuffer +37 days exceeds ±25 day tolerance (InceptionDate=2025-04-22, PeriodStart=2025-03-16)
+2026-06-09 21:28:55 | DEBUG    | End edge gap 2026-04-16->2026-04-22 forgiven by buffer.
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-04-10 PeriodEnd=2026-04-30 | StartBuffer=+12d EndBuffer=+8d | StartOK=True EndOK=True
+2026-06-09 21:28:55 | INFO     | Internal gap found: 2025-11-01 -> 2025-11-30
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-03-28 PeriodEnd=2026-05-17 | StartBuffer=+25d EndBuffer=+25d | StartOK=True EndOK=True
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-03-27 PeriodEnd=2026-04-22 | StartBuffer=+26d EndBuffer=+0d | StartOK=False EndOK=True
+2026-06-09 21:28:55 | INFO     | StartBuffer +26 days exceeds ±25 day tolerance (InceptionDate=2025-04-22, PeriodStart=2025-03-27)
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2024-01-01 PeriodEnd=2024-12-31 | StartBuffer=+477d EndBuffer=-477d | StartOK=False EndOK=False
+2026-06-09 21:28:55 | INFO     | StartBuffer +477 days exceeds ±25 day tolerance (InceptionDate=2025-04-22, PeriodStart=2024-01-01)
+2026-06-09 21:28:55 | INFO     | EndBuffer -477 days exceeds ±25 day tolerance (ExpirationDate=2026-04-22, PeriodEnd=2024-12-31)
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-04-22 PeriodEnd=2026-03-28 | StartBuffer=+0d EndBuffer=-25d | StartOK=True EndOK=True
+2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-04-22 PeriodEnd=2026-03-27 | StartBuffer=+0d EndBuffer=-26d | StartOK=True EndOK=False
+2026-06-09 21:28:55 | INFO     | EndBuffer -26 days exceeds ±25 day tolerance (ExpirationDate=2026-04-22, PeriodEnd=2026-03-27)
