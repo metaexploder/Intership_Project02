@@ -19,6 +19,14 @@ OUTPUT_REPORT = BASE_DIR / "PACE_PayPeriod_Validation_Report.xlsx"
 LOG_FILE = BASE_DIR / "pace_validator.log"
 
 # ---------------------------------------------------------------------------
+# Validation Settings
+# ---------------------------------------------------------------------------
+# Number of buffer days allowed on each side of the policy period.
+# A WOID is FULL if payroll covers (InceptionDate - BUFFER_DAYS) to
+# (ExpirationDate + BUFFER_DAYS) with no gaps inside the policy window.
+BUFFER_DAYS = 25
+
+# ---------------------------------------------------------------------------
 # SQL Server Connection
 # ---------------------------------------------------------------------------
 def get_connection_string() -> str:

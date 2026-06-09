@@ -12,10 +12,10 @@ Performance optimizations:
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Dict, List, Tuple
-from datetime import date
+from typing import Dict, List, Optional, Tuple
+from datetime import date, timedelta
 
-from config import DATASET_DIR, OUTPUT_REPORT
+from config import BUFFER_DAYS, DATASET_DIR, OUTPUT_REPORT
 from db_client import fetch_all_file_info, fetch_all_policy_periods, get_connection
 from file_retriever import retrieve_files
 from input_reader import read_woids
@@ -100,6 +100,12 @@ def main(input_file: str) -> None:
                     "missing_gaps": [],
                     "sheets_processed": 0,
                     "files_count": 0,
+                    "policy_start": None,
+                    "policy_end": None,
+                    "period_start": None,
+                    "period_end": None,
+                    "start_buffer": None,
+                    "end_buffer": None,
                 })
 
     # Sort results back to input order
@@ -156,6 +162,12 @@ def _process_woid(
             "missing_gaps": [],
             "sheets_processed": 0,
             "files_count": 0,
+            "policy_start": None,
+            "policy_end": None,
+            "period_start": None,
+            "period_end": None,
+            "start_buffer": None,
+            "end_buffer": None,
         }
     policy_start, policy_end = policy
 
@@ -168,6 +180,12 @@ def _process_woid(
             "missing_gaps": [(policy_start, policy_end)],
             "sheets_processed": 0,
             "files_count": 0,
+            "policy_start": policy_start,
+            "policy_end": policy_end,
+            "period_start": None,
+            "period_end": None,
+            "start_buffer": None,
+            "end_buffer": None,
         }
 
     # --- Retrieve files ---
@@ -180,6 +198,12 @@ def _process_woid(
             "missing_gaps": [(policy_start, policy_end)],
             "sheets_processed": 0,
             "files_count": len(file_info),
+            "policy_start": policy_start,
+            "policy_end": policy_end,
+            "period_start": None,
+            "period_end": None,
+            "start_buffer": None,
+            "end_buffer": None,
         }
 
     # --- Extract payroll periods ---
@@ -194,7 +218,28 @@ def _process_woid(
             "missing_gaps": [(policy_start, policy_end)],
             "sheets_processed": extraction["sheets_processed"],
             "files_count": extraction["files_count"],
+            "policy_start": policy_start,
+            "policy_end": policy_end,
+            "period_start": None,
+            "period_end": None,
+            "start_buffer": None,
+            "end_buffer": None,
         }
+
+    # --- Compute PeriodStart / PeriodEnd (min/max across all sheets & files) ---
+    period_start: date = min(s for s, _ in payroll_periods)
+    period_end:   date = max(e for _, e in payroll_periods)
+
+    # --- Buffer: how many days payroll extends beyond the policy window ---
+    # Positive  → payroll starts BEFORE inception / ends AFTER expiration (buffer surplus)
+    # Negative  → payroll starts AFTER inception / ends BEFORE expiration (buffer deficit)
+    start_buffer: int = (policy_start - period_start).days   # days before inception
+    end_buffer:   int = (period_end   - policy_end).days     # days after expiration
+
+    logger.info(
+        "WOID %s - PeriodStart=%s PeriodEnd=%s StartBuffer=%+d EndBuffer=%+d",
+        woid, period_start, period_end, start_buffer, end_buffer,
+    )
 
     # --- Validate coverage ---
     status, gaps = validate_coverage(policy_start, policy_end, payroll_periods)
@@ -211,6 +256,12 @@ def _process_woid(
         "missing_gaps": gaps,
         "sheets_processed": extraction["sheets_processed"],
         "files_count": extraction["files_count"],
+        "policy_start": policy_start,
+        "policy_end": policy_end,
+        "period_start": period_start,
+        "period_end": period_end,
+        "start_buffer": start_buffer,
+        "end_buffer": end_buffer,
     }
 
 

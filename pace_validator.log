@@ -7,3 +7,7 @@
 2026-06-03 12:40:21 | INFO     | Report saved -> test_report.xlsx
 2026-06-03 13:37:00 | INFO     | Report saved -> test_report.xlsx
 2026-06-03 13:50:51 | WARNING  | Ignored invalid payroll period: 2026-05-10 -> 2026-05-01 (start date is after end date)
+2026-06-09 18:31:15 | DEBUG    | Policy window: 2026-01-01 -> 2026-12-31 | Effective window (±25 days): 2025-12-07 -> 2027-01-25
+2026-06-09 18:32:56 | INFO     | Buffer absorbed start edge gap: 2026-01-01 -> 2026-01-20 (20 day(s), tolerance=25)
+2026-06-09 18:32:56 | INFO     | Buffer absorbed end edge gap: 2026-12-12 -> 2026-12-31 (20 day(s), tolerance=25)
+2026-06-09 18:32:56 | INFO     | Buffer absorbed start edge gap: 2026-01-01 -> 2026-01-25 (25 day(s), tolerance=25)
