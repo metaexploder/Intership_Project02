@@ -226,19 +226,31 @@ def _process_woid(
             "end_buffer": None,
         }
 
-    # --- Compute PeriodStart / PeriodEnd (min/max across all sheets & files) ---
-    period_start: date = min(s for s, _ in payroll_periods)
-    period_end:   date = max(e for _, e in payroll_periods)
+    # --- Compute PeriodStart / PeriodEnd from OVERLAPPING periods only ---
+    # Only periods whose date range intersects [policy_start, policy_end] are relevant.
+    # Periods from other policy years are excluded so they don't skew buffer values.
+    overlapping = [
+        (s, e) for s, e in payroll_periods
+        if e >= policy_start and s <= policy_end
+    ]
 
-    # --- Buffer: how many days payroll extends beyond the policy window ---
-    # Positive  → payroll starts BEFORE inception / ends AFTER expiration (buffer surplus)
-    # Negative  → payroll starts AFTER inception / ends BEFORE expiration (buffer deficit)
-    start_buffer: int = (policy_start - period_start).days   # days before inception
-    end_buffer:   int = (period_end   - policy_end).days     # days after expiration
+    if overlapping:
+        period_start: date = min(s for s, _ in overlapping)
+        period_end:   date = max(e for _, e in overlapping)
+        start_buffer: int = (policy_start - period_start).days
+        end_buffer:   int = (period_end   - policy_end).days
+    else:
+        # No overlapping periods — validator will return NO
+        period_start = None
+        period_end   = None
+        start_buffer = None
+        end_buffer   = None
 
     logger.info(
-        "WOID %s - PeriodStart=%s PeriodEnd=%s StartBuffer=%+d EndBuffer=%+d",
-        woid, period_start, period_end, start_buffer, end_buffer,
+        "WOID %s - PeriodStart=%s PeriodEnd=%s StartBuffer=%s EndBuffer=%s",
+        woid, period_start, period_end,
+        f"{start_buffer:+d}" if start_buffer is not None else "N/A",
+        f"{end_buffer:+d}"   if end_buffer   is not None else "N/A",
     )
 
     # --- Validate coverage ---

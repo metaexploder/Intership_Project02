@@ -33,3 +33,17 @@
 2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-04-22 PeriodEnd=2026-03-28 | StartBuffer=+0d EndBuffer=-25d | StartOK=True EndOK=True
 2026-06-09 21:28:55 | DEBUG    | WOID buffers: PeriodStart=2025-04-22 PeriodEnd=2026-03-27 | StartBuffer=+0d EndBuffer=-26d | StartOK=True EndOK=False
 2026-06-09 21:28:55 | INFO     | EndBuffer -26 days exceeds ±25 day tolerance (ExpirationDate=2026-04-22, PeriodEnd=2026-03-27)
+2026-06-10 18:18:10 | DEBUG    | 2 of 4 payroll period(s) overlap the policy window and will be used for buffer calculation.
+2026-06-10 18:18:10 | DEBUG    | WOID buffers: PeriodStart=2025-03-15 PeriodEnd=2026-04-15 | StartBuffer=+17d EndBuffer=+14d | StartOK=True EndOK=True
+2026-06-10 18:18:10 | INFO     | All 1 payroll period(s) lie entirely outside the policy window [2025-04-01, 2026-04-01] — marking as NO.
+2026-06-10 18:18:10 | DEBUG    | 1 of 2 payroll period(s) overlap the policy window and will be used for buffer calculation.
+2026-06-10 18:18:10 | DEBUG    | WOID buffers: PeriodStart=2025-02-01 PeriodEnd=2026-04-15 | StartBuffer=+59d EndBuffer=+14d | StartOK=False EndOK=True
+2026-06-10 18:18:10 | INFO     | StartBuffer +59 days exceeds ±25 day tolerance (InceptionDate=2025-04-01, PeriodStart=2025-02-01)
+2026-06-10 18:18:10 | DEBUG    | 1 of 1 payroll period(s) overlap the policy window and will be used for buffer calculation.
+2026-06-10 18:18:10 | DEBUG    | WOID buffers: PeriodStart=2025-04-22 PeriodEnd=2026-04-22 | StartBuffer=+0d EndBuffer=+0d | StartOK=True EndOK=True
+2026-06-10 18:18:10 | DEBUG    | 1 of 1 payroll period(s) overlap the policy window and will be used for buffer calculation.
+2026-06-10 18:18:10 | DEBUG    | WOID buffers: PeriodStart=2025-01-01 PeriodEnd=2026-04-22 | StartBuffer=+111d EndBuffer=+0d | StartOK=False EndOK=True
+2026-06-10 18:18:10 | INFO     | StartBuffer +111 days exceeds ±25 day tolerance (InceptionDate=2025-04-22, PeriodStart=2025-01-01)
+2026-06-10 18:18:10 | DEBUG    | 2 of 2 payroll period(s) overlap the policy window and will be used for buffer calculation.
+2026-06-10 18:18:10 | DEBUG    | WOID buffers: PeriodStart=2025-04-10 PeriodEnd=2026-04-30 | StartBuffer=+12d EndBuffer=+8d | StartOK=True EndOK=True
+2026-06-10 18:18:10 | INFO     | Internal gap found: 2025-11-01 -> 2025-11-30

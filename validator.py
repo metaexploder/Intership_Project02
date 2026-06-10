@@ -78,10 +78,33 @@ def validate_coverage(
         return ("NO", [(policy_start, policy_end)])
 
     # -----------------------------------------------------------------------
-    # Step 1 — Compute overall payroll bounds (PeriodStart / PeriodEnd)
+    # Step 1 — Filter to periods that OVERLAP with the policy window
+    #          Overlap condition: period_end >= policy_start AND period_start <= policy_end
+    #          Periods entirely outside the policy window are excluded from buffer
+    #          computation — they belong to a different policy and should not skew results.
     # -----------------------------------------------------------------------
-    period_start: date = min(s for s, _ in cleaned_periods)
-    period_end:   date = max(e for _, e in cleaned_periods)
+    overlapping_periods = [
+        (s, e) for s, e in cleaned_periods
+        if e >= policy_start and s <= policy_end
+    ]
+
+    if not overlapping_periods:
+        # All payroll data is outside the policy window → NO coverage
+        logger.info(
+            "All %d payroll period(s) lie entirely outside the policy window "
+            "[%s, %s] — marking as NO.",
+            len(cleaned_periods), policy_start, policy_end,
+        )
+        return ("NO", [(policy_start, policy_end)])
+
+    logger.debug(
+        "%d of %d payroll period(s) overlap the policy window and will be used for buffer calculation.",
+        len(overlapping_periods), len(cleaned_periods),
+    )
+
+    # Compute PeriodStart / PeriodEnd from OVERLAPPING periods ONLY
+    period_start: date = min(s for s, _ in overlapping_periods)
+    period_end:   date = max(e for _, e in overlapping_periods)
 
     # -----------------------------------------------------------------------
     # Step 2 — Compute buffers
